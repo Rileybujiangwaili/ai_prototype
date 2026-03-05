@@ -315,6 +315,8 @@ input:focus, select:focus {
 
 .irs-meta span { margin: 0 0.75rem; }
 
+.irs-filing-status { margin-top: 0.5rem; font-size: 0.95rem; }
+
 .irs-form-table {
   width: 100%;
   border-collapse: collapse;
@@ -406,6 +408,13 @@ input:focus, select:focus {
 
 .result-summary.owed .result-amount {
   color: var(--error);
+}
+
+.result-summary-main { margin-bottom: 0.5rem; }
+.result-bracket {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-sub);
 }
 
 .result-label {

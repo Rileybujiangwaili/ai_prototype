@@ -13,9 +13,8 @@ from datetime import datetime
 
 from flask import jsonify
 from google import genai
-from dotenv import load_dotenv
-from google import genai
 from google.genai import types
+from dotenv import load_dotenv
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -24,7 +23,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 from werkzeug.datastructures import ImmutableMultiDict
 
-from tax_engine import run_tax_calculation
+from tax_engine import run_tax_calculation, get_marginal_bracket
 
 app = Flask(__name__)
 app.secret_key = "prototype-secret-change-in-production"
@@ -37,13 +36,11 @@ _DB_DIR = os.path.join(_BASE_DIR, "instance")
 _DB_PATH = os.path.join(_DB_DIR, "tax_data.db")
 os.makedirs(_DB_DIR, exist_ok=True)
 
-# 2. Get the key from the environment
-api_key = os.getenv("GEMINI_API_KEY")
-if api_key:
-    client = genai.Client(api_key=api_key)
-else:
-    client = None
-    print("Warning: GEMINI_API_KEY not found in .env file.")
+# AI: use GEMINI_API_KEY or GOOGLE_API_KEY from .env
+api_key = os.getenv("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+client = genai.Client(api_key=api_key) if api_key else None
+if not client:
+    print("Warning: GEMINI_API_KEY or GOOGLE_API_KEY not found. AI Auto-Fill will be offline.")
 
 # Use DATABASE_URL only for MySQL/Postgres; for SQLite always use absolute path
 _env_db = os.environ.get("DATABASE_URL", "").strip()
@@ -77,9 +74,16 @@ class TaxResult(db.Model):
 
     def to_result_dict(self):
         """Convert to dict matching _session_to_result format for templates."""
+        bracket = get_marginal_bracket(Decimal(str(self.taxable_income)), self.filing_status)
         return {
             "client_name": self.client_name,
             "client_email": self.client_email,
+            "filing_status": self.filing_status,
+            "marginal_bracket": {
+                "rate_pct": bracket["rate_pct"],
+                "bracket_label": bracket["bracket_label"],
+                "bracket_range": bracket.get("bracket_range", ""),
+            },
             "gross_income": Decimal(str(self.gross_income)),
             "standard_deduction": Decimal(str(self.standard_deduction)),
             "additional_deductions": Decimal(str(self.additional_deductions)),
@@ -198,19 +202,27 @@ def calculate():
     db.session.add(tax_record)
     db.session.commit()
 
-    session["tax_result"] = {k: str(v) for k, v in result.items()}
+    session["tax_result"] = {k: str(v) for k, v in result.items() if k != "marginal_bracket"}
+    session["tax_result"]["marginal_bracket"] = {
+        "rate_pct": result["marginal_bracket"]["rate_pct"],
+        "bracket_label": result["marginal_bracket"]["bracket_label"],
+        "bracket_range": result["marginal_bracket"].get("bracket_range", ""),
+    }
     session["tax_result"]["client_name"] = parsed["client_name"] or ""
     session["tax_result"]["client_email"] = parsed["client_email"] or ""
+    session["tax_result"]["filing_status"] = parsed["filing_status"]
     session["tax_result_id"] = tax_record.id
     return redirect(url_for("results")) 
 
 def _session_to_result(data: dict) -> dict:
     """Convert session-stored strings back to Decimal/bool for templates."""
     result = {}
-    skip_keys = {"is_refund", "client_name", "client_email"}
+    skip_keys = {"is_refund", "client_name", "client_email", "filing_status"}
     for k, v in data.items():
         if k == "is_refund":
             result[k] = v == "True"
+        elif k == "marginal_bracket":
+            result[k] = v if isinstance(v, dict) else {}
         elif k in skip_keys:
             result[k] = v or None
         else:
@@ -310,16 +322,10 @@ def tax_form():
     result = _session_to_result(data)
     return render_template("tax_form.html", result=result)
 
-# --- AI AGENT CONFIGURATION ---
-# Prefer GOOGLE_API_KEY env var. Fallback for local dev only — never commit real keys.
-_api_key = os.environ.get("GOOGLE_API_KEY", "AIzaSyC0Q9Udbf9NtOWLuzldseiTxvyvSeMKO0Q")
-client = genai.Client(api_key=_api_key) if _api_key else None
-
-
 @app.route("/api/parse-narrative", methods=["POST"])
 def parse_narrative():
-    data = request.get_json()
-    narrative = data.get("narrative", "")
+    data = request.get_json() or {}
+    narrative = (data.get("narrative") or "").strip()
 
     if not narrative:
         return jsonify({"error": "No narrative provided"}), 400
