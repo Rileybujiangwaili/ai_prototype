@@ -20,7 +20,7 @@ A Flask web app for simplified federal income tax calculations (Form 1040-style)
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/tax_ai_agent.git
+git clone 
 cd tax_ai_agent
 ```
 
@@ -30,15 +30,10 @@ cd tax_ai_agent
 python -m venv venv
 ```
 
-**macOS / Linux:**
 ```bash
 source venv/bin/activate
 ```
 
-**Windows:**
-```bash
-venv\Scripts\activate
-```
 
 ### 3. Install dependencies
 
@@ -83,7 +78,7 @@ tax_ai_agent/
 │   ├── base.html
 │   ├── index.html      # Main form
 │   ├── results.html
-│   ├── tax_form.html   # Form 1040-style output
+│   ├── tax_form.html   # Form output
 │   ├── firm_login.html
 │   └── history.html
 ├── instance/           # SQLite DB (created on first run)
