@@ -93,10 +93,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
               if (response.ok) {
                   // Populate the form fields with the AI's JSON data
-                  if (data.gross_income) document.getElementById('gross_income').value = data.gross_income;
-                  if (data.filing_status) document.getElementById('filing_status').value = data.filing_status;
-                  if (data.additional_deductions) document.getElementById('additional_deductions').value = data.additional_deductions;
-                  if (data.federal_withheld) document.getElementById('federal_withheld').value = data.federal_withheld;
+                  if (data.gross_income != null) document.getElementById('gross_income').value = data.gross_income;
+                  if (data.filing_status != null) document.getElementById('filing_status').value = data.filing_status;
+                  if (data.additional_deductions != null) document.getElementById('additional_deductions').value = data.additional_deductions;
+                  if (data.federal_withheld != null) document.getElementById('federal_withheld').value = data.federal_withheld;
 
                   statusSpan.textContent = "✨ Form auto-filled successfully!";
                   statusSpan.style.color = "var(--success)";

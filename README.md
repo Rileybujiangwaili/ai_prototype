@@ -48,6 +48,8 @@ Create a `.env` file in the project root:
 ```bash
 # Required for AI Auto-Fill (optional — app works without it, but AI will be offline)
 GEMINI_API_KEY=your_google_ai_api_key_here
+# Optional: pin a specific Gemini model (defaults to gemini-flash-latest)
+# GEMINI_MODEL=gemini-3.6-flash
 ```
 
 Get a free API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
@@ -93,6 +95,7 @@ tax_ai_agent/
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GEMINI_API_KEY` | For AI | Google AI API key for Auto-Fill (`GOOGLE_API_KEY` also supported) |
+| `GEMINI_MODEL` | Optional | Gemini model ID for Auto-Fill; defaults to `gemini-flash-latest` |
 | `DATABASE_URL` | Optional | MySQL/PostgreSQL connection string; defaults to SQLite |
 
 ---
