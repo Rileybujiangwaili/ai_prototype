@@ -2,6 +2,12 @@
 
 A Flask web app for simplified federal income tax calculations (Form 1040-style). Enter your information, get an instant estimate, and optionally use the AI assistant to auto-fill the form from natural language.
 
+## Live demo
+
+**Live demo:** _add your Vercel URL here after deploying (e.g. `https://ai-prototype.vercel.app`)_
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FRileybujiangwaili%2Fai_prototype&env=GEMINI_API_KEY&envDescription=Google%20AI%20API%20key%20for%20AI%20Auto-Fill&envLink=https%3A%2F%2Faistudio.google.com%2Fapp%2Fapikey)
+
 ## Features
 
 - **Tax calculator** — Enter gross income, filing status, deductions; get refund/amount owed
@@ -64,6 +70,20 @@ Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser.
 
 ---
 
+## Deploy to Vercel
+
+The repo includes a `vercel.json`, so it deploys as a Python serverless function.
+
+1. Click the **Deploy with Vercel** button above (or go to [vercel.com/new](https://vercel.com/new) and import this GitHub repo).
+2. When prompted, set the `GEMINI_API_KEY` environment variable (optionally `GEMINI_MODEL`).
+3. Click **Deploy**. Vercel gives you a URL like `https://<project>.vercel.app` — paste it into the **Live demo** line above.
+
+Every push to `main` then redeploys automatically, and pull requests get preview URLs.
+
+**Database note:** Vercel's filesystem is read-only, so on Vercel the SQLite DB lives in `/tmp` and is **temporary** (it resets when the function restarts). That's fine for a demo; for persistent history, set `DATABASE_URL` to a hosted MySQL/Postgres database.
+
+---
+
 ## Project structure
 
 ```
@@ -71,6 +91,7 @@ tax_ai_agent/
 ├── app.py              # Flask app, routes, validation, DB, AI
 ├── tax_engine.py       # Tax calculation logic (2025 brackets)
 ├── requirements.txt
+├── vercel.json         # Vercel deployment config
 ├── .env                # API keys (create this, do not commit)
 ├── .gitignore
 ├── static/

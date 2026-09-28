@@ -33,7 +33,8 @@ load_dotenv()
 
 # Database: use absolute path for SQLite (relative paths fail when CWD differs)
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-_DB_DIR = os.path.join(_BASE_DIR, "instance")
+# On Vercel the project directory is read-only; only /tmp is writable (and ephemeral).
+_DB_DIR = "/tmp" if os.environ.get("VERCEL") else os.path.join(_BASE_DIR, "instance")
 _DB_PATH = os.path.join(_DB_DIR, "tax_data.db")
 os.makedirs(_DB_DIR, exist_ok=True)
 
@@ -410,9 +411,11 @@ def _migrate_add_client_columns():
             pass  # Column exists or table missing
 
 
+# Create tables at import time so serverless deployments (Vercel) have them too.
+with app.app_context():
+    db.create_all()
+    _migrate_add_client_columns()
+
+
 if __name__ == "__main__":
-    with app.app_context():
-        os.makedirs(app.instance_path, exist_ok=True)
-        db.create_all()
-        _migrate_add_client_columns()
     app.run(debug=True, port=5000)
