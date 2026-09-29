@@ -14,6 +14,7 @@ from datetime import datetime
 from flask import jsonify
 from google import genai
 from google.genai import types
+from google.genai import errors as genai_errors
 from dotenv import load_dotenv
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
@@ -32,13 +33,17 @@ load_dotenv()
 
 # Database: use absolute path for SQLite (relative paths fail when CWD differs)
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-_DB_DIR = os.path.join(_BASE_DIR, "instance")
+# On Vercel the project directory is read-only; only /tmp is writable (and ephemeral).
+_DB_DIR = "/tmp" if os.environ.get("VERCEL") else os.path.join(_BASE_DIR, "instance")
 _DB_PATH = os.path.join(_DB_DIR, "tax_data.db")
 os.makedirs(_DB_DIR, exist_ok=True)
 
 # AI: use GEMINI_API_KEY or GOOGLE_API_KEY from .env
 api_key = os.getenv("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 client = genai.Client(api_key=api_key) if api_key else None
+# gemini-2.0-flash was shut down in June 2026. Default to the auto-updating
+# Flash alias; override with GEMINI_MODEL (e.g. gemini-3.6-flash) to pin a version.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 if not client:
     print("Warning: GEMINI_API_KEY or GOOGLE_API_KEY not found. AI Auto-Fill will be offline.")
 
@@ -322,6 +327,21 @@ def tax_form():
     result = _session_to_result(data)
     return render_template("tax_form.html", result=result)
 
+_NARRATIVE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "gross_income": {"type": "NUMBER"},
+        "filing_status": {
+            "type": "STRING",
+            "enum": ["single", "married_joint", "head_of_household"],
+        },
+        "additional_deductions": {"type": "NUMBER"},
+        "federal_withheld": {"type": "NUMBER"},
+    },
+    "required": ["gross_income", "filing_status", "additional_deductions", "federal_withheld"],
+}
+
+
 @app.route("/api/parse-narrative", methods=["POST"])
 def parse_narrative():
     data = request.get_json() or {}
@@ -332,33 +352,53 @@ def parse_narrative():
 
     if not client:
         return jsonify({
-            "error": "AI Agent offline. Set GOOGLE_API_KEY in your environment."
+            "error": "AI Agent offline. Set GEMINI_API_KEY in your .env file."
         }), 503
 
-    prompt = f"Extract tax data from this narrative. Return JSON with keys: gross_income (number), filing_status (exactly one of: single, married_joint, head_of_household), additional_deductions (number), federal_withheld (number). Narrative: {narrative}"
+    prompt = f"Extract tax data from this narrative. Narrative: {narrative}"
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=GEMINI_MODEL,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                system_instruction="You extract tax data. Return only valid JSON with keys: gross_income, filing_status, additional_deductions, federal_withheld. Use numbers for amounts. filing_status must be exactly: single, married_joint, or head_of_household.",
+                response_schema=_NARRATIVE_SCHEMA,
+                system_instruction=(
+                    "You extract US federal tax data from a taxpayer's description. "
+                    "Use plain numbers for dollar amounts (no $ or commas); use 0 when an amount is not mentioned. "
+                    "filing_status must be exactly: single, married_joint, or head_of_household."
+                ),
             ),
             contents=prompt,
         )
 
-        # Response text contains the JSON string
-        raw_text = getattr(response, "text", None) or ""
-        parsed = json.loads(raw_text) if isinstance(raw_text, str) else raw_text
+        parsed = response.parsed
+        if parsed is None:
+            parsed = json.loads(response.text or "")
+        if isinstance(parsed, list):
+            parsed = parsed[0] if parsed else {}
+        if not isinstance(parsed, dict):
+            raise json.JSONDecodeError("Expected a JSON object", str(parsed), 0)
         return jsonify(parsed)
 
     except json.JSONDecodeError as e:
         print(f"AI JSON parse error: {e}")
         return jsonify({"error": "AI returned invalid data. Try rephrasing."}), 500
+    except genai_errors.APIError as e:
+        print(f"AI API error ({GEMINI_MODEL}): {e}")
+        if e.code in (401, 403) or "API key" in str(e):
+            msg = "AI API key is invalid. Check GEMINI_API_KEY in your .env."
+        elif e.code == 404:
+            msg = f"AI model '{GEMINI_MODEL}' is not available. Set GEMINI_MODEL to a current Gemini model."
+        elif e.code == 429:
+            msg = "AI rate limit reached. Please wait a moment and try again."
+        else:
+            msg = f"AI request failed ({e.code}). Please try again."
+        return jsonify({"error": msg}), 502
     except Exception as e:
         print(f"AI Error: {e}")
-        return jsonify({"error": "AI Agent offline or API key invalid."}), 500
-    
+        return jsonify({"error": "AI Agent error. Check the server log for details."}), 500
+
 
 def _migrate_add_client_columns():
     """Add client_name, client_email to existing DBs."""
@@ -371,9 +411,11 @@ def _migrate_add_client_columns():
             pass  # Column exists or table missing
 
 
+# Create tables at import time so serverless deployments (Vercel) have them too.
+with app.app_context():
+    db.create_all()
+    _migrate_add_client_columns()
+
+
 if __name__ == "__main__":
-    with app.app_context():
-        os.makedirs(app.instance_path, exist_ok=True)
-        db.create_all()
-        _migrate_add_client_columns()
     app.run(debug=True, port=5000)
