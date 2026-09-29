@@ -9,11 +9,14 @@
   <div class="ai-agent-box" style="background: var(--accent-green-light); padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem; border: 1px solid var(--accent-green-main);">
     <h3 style="margin-top: 0; color: var(--accent-green-main);">✨ AI Assistant</h3>
     <p style="font-size: 0.9rem; margin-bottom: 1rem; color: var(--text-main);">Describe your situation, and our AI will fill out the form for you.</p>
+    {% if not ai_available %}
+    <p style="font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--error);">AI Auto-Fill is offline. Add <code>GEMINI_API_KEY</code> to your <code>.env</code> file. Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>.</p>
+    {% endif %}
     <div class="ai-agent-inner">
       <textarea id="narrative-input" class="ai-agent-textarea" rows="3" placeholder="e.g., I'm a single student making $45,000 at my job, and I had $5,000 withheld..."></textarea>
       <div>
-        <button type="button" id="ai-parse-btn" class="btn btn-secondary">Auto-Fill Form</button>
-        <span id="ai-status" style="margin-left: 1rem; font-size: 0.9rem; color: var(--text-sub);" aria-live="polite"></span>
+        <button type="button" id="ai-parse-btn" class="btn btn-secondary" {% if not ai_available %}disabled title="Add GEMINI_API_KEY to .env"{% endif %}>Auto-Fill Form</button>
+        <span id="ai-status" style="margin-left: 1rem; font-size: 0.9rem; color: var(--text-sub);" aria-live="polite">{% if not ai_available %}Add GEMINI_API_KEY to .env to enable{% endif %}</span>
       </div>
     </div>
   </div>

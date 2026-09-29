@@ -168,7 +168,7 @@ def validate_and_parse_form(form: ImmutableMultiDict) -> Tuple[Optional[Dict[str
 @app.route("/")
 def index():
     """Serve the main input form."""
-    return render_template("index.html")
+    return render_template("index.html", ai_available=client is not None)
 
 
 @app.route("/calculate", methods=["POST"])
